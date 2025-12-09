@@ -1,0 +1,75 @@
+async function getRegionBoundaryData(worksheetName: string, cellAddress: string) {
+    await Excel.run(async (context) => {
+        // --- 1. Setup and Get Current Region ---
+        const worksheet = context.workbook.worksheets.getItem(worksheetName);
+        const cellRange = worksheet.getRange(cellAddress);
+
+        // Get the contiguous block of data surrounding the cell (the data region)
+        const currentRegion = cellRange.getCurrentRegion();
+
+        // --- 2. Logic for Row (Horizontal Extreme) ---
+        // Find the intersection of the current region and the entire row.
+        // This gives us the part of the row that is inside the data block (e.g., A5:D5).
+        const rowIntersection = currentRegion.getIntersectionOrNullObject(
+            cellRange.getEntireRow()
+        );
+
+        // --- 3. Logic for Column (Vertical Extreme) ---
+        // Find the intersection of the current region and the entire column.
+        // This gives us the part of the column that is inside the data block (e.g., C2:C10).
+        const columnIntersection = currentRegion.getIntersectionOrNullObject(
+            cellRange.getEntireColumn()
+        );
+
+        await context.sync();
+
+        // --- 4. Get the First Elements of the Intersections ---
+        let firstRowElement = null;
+        let firstColElement = null;
+
+        // Check if the intersection exists before getting the cell
+        if (!rowIntersection.isNullObject) {
+            // The top-left cell (0, 0) of the row intersection is the first cell in that row's region.
+            firstRowElement = rowIntersection.getCell(0, 0);
+            firstRowElement.load("values, valueTypes, address");
+        }
+
+        if (!columnIntersection.isNullObject) {
+            // The top-left cell (0, 0) of the column intersection is the first cell in that column's region.
+            firstColElement = columnIntersection.getCell(0, 0);
+            firstColElement.load("values, valueTypes, address");
+        }
+        
+        // --- 5. Synchronize and Process Results ---
+        await context.sync();
+
+        let rowHeader = "";
+        let colHeader = "";
+
+        // Process Row Result
+        if (firstRowElement && firstRowElement.valueTypes[0][0] === Excel.RangeValueType.text) {
+            rowHeader = firstRowElement.values[0][0];
+            console.log(`Row Header Found at ${firstRowElement.address}: "${rowHeader}"`);
+        } else {
+            console.log("No string value found at the start of the row's data region.");
+        }
+
+        // Process Column Result
+        if (firstColElement && firstColElement.valueTypes[0][0] === Excel.RangeValueType.text) {
+            colHeader = firstColElement.values[0][0];
+            console.log(`Column Header Found at ${firstColElement.address}: "${colHeader}"`);
+        } else {
+            console.log("No string value found at the top of the column's data region.");
+        }
+
+        // Return the final map of results
+        return {
+            rowHeader: rowHeader,
+            columnHeader: colHeader
+        };
+    });
+}
+
+// --- Example Usage ---
+// Replace "Sheet1" and "C5" with your actual sheet name and cell address.
+getRegionBoundaryData("Sheet1", "C5");
